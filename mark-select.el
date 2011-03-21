@@ -41,7 +41,7 @@
 (defvar mark-select-list nil
   "*List of lines to select")
 
-(defvar mark-select-help-message "m: mark  u: unmark  x: execute  q: quit")
+(defvar mark-select-help-message "x: execute  q: quit  m: mark  u: unmark  U: up  D: down")
 
 (defvar mark-select-marker-char ?*)
 
@@ -56,11 +56,13 @@
 
 (defvar mark-select-mode-map
   (let ((map (make-keymap)))
+    (define-key map "x"       'mark-select-do-marked)
+    (define-key map "q"       'mark-select-quit)
     (define-key map [mouse-1] 'mark-select-toggle-mark)
-    (define-key map "m" 'mark-select-mark)
-    (define-key map "u" 'mark-select-unmark)
-    (define-key map "x" 'mark-select-do-marked)
-    (define-key map "q" 'mark-select-quit)
+    (define-key map "m"       'mark-select-mark)
+    (define-key map "u"       'mark-select-unmark)
+    (define-key map "U"       'mark-select-up)
+    (define-key map "D"       'mark-select-down)
     map)
   "Local keymap for `mark-select-mode' buffers")
 
@@ -100,12 +102,42 @@
 (defvar mark-select-do-marked-func
   (lambda (hash)
     (let ((keys (mark-select-hash-keys hash)))
-      (print keys)
       (dolist (key keys)
-        (print (gethash key hash))))))
+        (message (format "%s %s" key (gethash key hash)))))))
 
 (defun mark-select-hash-keys (hash)
   (loop for k being the hash-keys in hash collect k))
+
+(defun mark-select-transpose-lines (n)
+  "Transpose a current line with a line n."
+  (interactive "P")
+  (let ((transposable nil)
+        beg1 end1 beg2 end2)
+    (save-excursion
+      (beginning-of-line)
+      (setq beg1 (point))
+      (when (looking-at mark-select-re-mark)
+        (end-of-line)
+        (setq end1 (point))
+        (forward-line n)
+        (beginning-of-line)
+        (setq beg2 (point))
+        (when (looking-at mark-select-re-mark)
+          (setq transposable t)
+          (end-of-line)
+          (setq end2 (point)))))
+    (if transposable
+        (let ((inhibit-read-only t))
+          (transpose-regions beg1 end1 beg2 end2))
+        (message "Cannot replace this line."))))
+
+(defun mark-select-up ()
+  (interactive)
+  (mark-select-transpose-lines -1))
+
+(defun mark-select-down ()
+  (interactive)
+  (mark-select-transpose-lines 1))
 
 (defun mark-select-mark-sub (&optional marker)
   "Mark the current element."
@@ -266,6 +298,8 @@ Return the position of the beginning of the element, or nil if none found."
 
 ;;;###autoload
 (defun mark-select-mode (&optional do-func new-mode-name)
+  (interactive)
+  (kill-all-local-variables)
   (use-local-map mark-select-mode-map)
   (setq major-mode 'mark-select-mode
         mode-name (capitalize (if new-mode-name new-mode-name mark-select-mode-name))
